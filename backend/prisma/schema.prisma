@@ -1,0 +1,169 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum WeightUnit {
+  KG
+  LB
+}
+
+enum WorkoutType {
+  A
+  B
+}
+
+enum AlternateExercise {
+  POWER_CLEAN
+  BARBELL_ROW
+  CHINUPS
+}
+
+enum WorkoutDayPattern {
+  MWF
+  TThSa
+  CUSTOM
+}
+
+model User {
+  id           String           @id @default(cuid())
+  email        String           @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  settings     UserSettings?
+  sessions     WorkoutSession[]
+  progressions ProgressionState[]
+  bodyweights  BodyWeight[]
+  prs          PersonalRecord[]
+}
+
+model UserSettings {
+  id                          String            @id @default(cuid())
+  userId                      String            @unique
+  user                        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  units                       WeightUnit        @default(KG)
+  workoutDayPattern           WorkoutDayPattern @default(MWF)
+  customWorkoutDays           Int[]
+  darkMode                    Boolean           @default(false)
+  alternateExercise           AlternateExercise @default(POWER_CLEAN)
+  autoReduceDeadliftIncrement Boolean           @default(false)
+  restTimerSeconds            Int               @default(180)
+  squatIncrement              Float             @default(2.5)
+  benchIncrement              Float             @default(2.5)
+  ohpIncrement                Float             @default(2.5)
+  deadliftIncrement           Float             @default(5.0)
+  powerCleanIncrement         Float             @default(2.5)
+  updatedAt                   DateTime          @updatedAt
+}
+
+model Exercise {
+  id                String             @id @default(cuid())
+  name              String             @unique
+  category          String
+  defaultSets       Int
+  defaultReps       Int
+  defaultIncrement  Float
+  notes             String?
+  workoutExercises  WorkoutExercise[]
+  progressionStates ProgressionState[]
+  prs               PersonalRecord[]
+}
+
+model WorkoutSession {
+  id            String            @id @default(cuid())
+  userId        String
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workoutType   WorkoutType
+  scheduledDate DateTime          @db.Date
+  startedAt     DateTime?
+  completedAt   DateTime?
+  notes         String?
+  bodyweight    Float?
+  exercises     WorkoutExercise[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@index([userId, scheduledDate])
+}
+
+model WorkoutExercise {
+  id           String         @id @default(cuid())
+  sessionId    String
+  session      WorkoutSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  exerciseId   String
+  exercise     Exercise       @relation(fields: [exerciseId], references: [id])
+  order        Int
+  targetSets   Int
+  targetReps   Int
+  targetWeight Float
+  sets         WorkoutSet[]
+
+  @@index([sessionId])
+}
+
+model WorkoutSet {
+  id                String          @id @default(cuid())
+  workoutExerciseId String
+  workoutExercise   WorkoutExercise @relation(fields: [workoutExerciseId], references: [id], onDelete: Cascade)
+  setNumber         Int
+  reps              Int?
+  weight            Float
+  completed         Boolean         @default(false)
+  notes             String?
+  rpe               Float?
+  durationSeconds   Int?
+  recordedAt        DateTime?
+
+  @@index([workoutExerciseId])
+}
+
+model ProgressionState {
+  id                  String    @id @default(cuid())
+  userId              String
+  user                User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseId          String
+  exercise            Exercise  @relation(fields: [exerciseId], references: [id])
+  currentWeight       Float
+  consecutiveFailures Int       @default(0)
+  lastWorkoutDate     DateTime?
+  totalWorkouts       Int       @default(0)
+  lastResetDate       DateTime?
+  lastResetFromWeight Float?
+  updatedAt           DateTime  @updatedAt
+
+  @@unique([userId, exerciseId])
+}
+
+model BodyWeight {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime @db.Date
+  weight    Float
+  createdAt DateTime @default(now())
+
+  @@unique([userId, date])
+  @@index([userId, date])
+}
+
+model PersonalRecord {
+  id                 String   @id @default(cuid())
+  userId             String
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exerciseId         String
+  exercise           Exercise @relation(fields: [exerciseId], references: [id])
+  weight             Float
+  reps               Int
+  date               DateTime @db.Date
+  estimatedOneRepMax Float
+  sessionId          String?
+  createdAt          DateTime @default(now())
+
+  @@index([userId, exerciseId])
+}
